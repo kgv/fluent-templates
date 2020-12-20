@@ -41,22 +41,28 @@ impl StaticLoader {
         args: Option<&HashMap<T, FluentValue>>,
     ) -> Option<String> {
         if let Some(bundle) = self.bundles.get(lang) {
-            if let Some(message) = bundle.get_message(text_id).and_then(|m| m.value) {
-                let mut errors = Vec::new();
-
-                let args = super::map_to_fluent_args(args);
-                let value = bundle.format_pattern(&message, args.as_ref(), &mut errors);
-
-                if errors.is_empty() {
-                    Some(value.into())
-                } else {
-                    panic!(
-                        "Failed to format a message for locale {} and id {}.\nErrors\n{:?}",
-                        lang, text_id, errors
-                    )
-                }
+            let pattern = if text_id.contains('.') {
+                // TODO: #![feature(str_split_once)]
+                let ids: Vec<_> = text_id.splitn(2, '.').collect();
+                bundle
+                    .get_message(ids[0])?
+                    .attributes
+                    .iter()
+                    .find(|attribute| attribute.id == ids[1])?
+                    .value
             } else {
-                None
+                bundle.get_message(text_id)?.value?
+            };
+            let mut errors = Vec::new();
+            let args = super::map_to_fluent_args(args);
+            let value = bundle.format_pattern(pattern, args.as_ref(), &mut errors);
+            if errors.is_empty() {
+                Some(value.into())
+            } else {
+                panic!(
+                    "Failed to format a message for locale {} and id {}.\nErrors\n{:?}",
+                    lang, text_id, errors
+                )
             }
         } else {
             panic!("Unknown language {}", lang)
